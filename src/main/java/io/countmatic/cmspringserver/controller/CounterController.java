@@ -55,7 +55,7 @@ public class CounterController implements CounterApi {
 			// FIXME: check that name doesnt start like "__"
 			j = RedisPoolProvider.getInstance().getResource();
 			Map<String, String> hash = new HashMap<String, String>();
-			hash.put("name", name);
+			hash.put(name, "0");
 			hash.put("__access", "rw");
 			j.hmset(token.getToken(), hash);
 			j.expire(token.getToken(), DEFAULT_TTL);
@@ -154,8 +154,56 @@ public class CounterController implements CounterApi {
 	public ResponseEntity<Counters> getCurrentReading(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter") @RequestParam(value = "name", required = false) String name) {
-		// TODO: impl
-		return new ResponseEntity<Counters>(HttpStatus.OK);
+		LOGGER.debug("deleting Counter " + name + " in " + token);
+		Jedis j = null;
+		ResponseEntity<Counters> response = null;
+		// check token
+		try {
+			// FIXME: check that name doesnt start like "__"
+			j = RedisPoolProvider.getInstance().getResource();
+			String access = j.hget(token, "__access");
+			if (null == access) {
+				LOGGER.debug("Token unknown");
+				response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			} else if (!"rw".equals(access)) {
+				LOGGER.debug("Forwarding to rw Token");
+				String rwToken = j.hget(token, "__token");
+				j.expire(token, DEFAULT_TTL);
+				return getCurrentReading(rwToken, name);
+			} else {
+				Counters counters = new Counters();
+				if (null != name) {
+					String val = j.hget(token, name);
+					if (null == val) {
+						LOGGER.debug("Name unknown");
+						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
+					} else {
+						LOGGER.debug("OK, have field in counter");
+						Counter c = new Counter().count(Long.valueOf(val)).name(name);
+						j.expire(token, DEFAULT_TTL);
+						counters.add(c);
+						response = new ResponseEntity<>(counters, HttpStatus.OK);
+					}
+				} else {
+					LOGGER.debug("OK, fetching all groupcounters");
+					Map<String, String> map = j.hgetAll(token);
+					for (String key : map.keySet()) {
+						if (!key.startsWith("__")) {
+							Counter c = new Counter().count(Long.valueOf(map.get(key))).name(key);
+							counters.add(c);
+						}
+					}
+					j.expire(token, DEFAULT_TTL);
+					response = new ResponseEntity<>(counters, HttpStatus.OK);
+				}
+			}
+		} finally {
+			if (null != j) {
+				RedisPoolProvider.getInstance().returnResource(j);
+			}
+		}
+
+		return response;
 	}
 
 	@Override
