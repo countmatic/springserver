@@ -1,7 +1,6 @@
 package io.countmatic.cmspringserver;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,6 +28,24 @@ public class CounterControllerTest {
 		assertTrue("Wrong found", cc.previousNumber("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
 		assertTrue("Wrong found", cc.resetCounter("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
 		assertTrue("Wrong found", cc.nextNumber("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+	}
+
+	@Test
+	public void testPermissionDenied() {
+		ResponseEntity<Token> tresp = cc.getNewCounter("UnitTest");
+		Token t = tresp.getBody();
+		tresp = cc.getReadOnlyToken(t.getToken());
+		assertTrue("Got no RO token", tresp.getStatusCode() == HttpStatus.OK);
+		t = tresp.getBody();
+		assertTrue("Wrong Permissiondenied", cc.addCounter(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied",
+				cc.deleteCounter(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied", cc.getReadOnlyToken(t.getToken()).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied",
+				cc.previousNumber(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied",
+				cc.resetCounter(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied", cc.nextNumber(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
 	}
 
 	@Test
@@ -126,17 +143,42 @@ public class CounterControllerTest {
 
 	@Test
 	public void testNextNumber() {
-		fail("Not yet implemented");
+		ResponseEntity<Token> tresp = cc.getNewCounter("UnitTest");
+		Token t = tresp.getBody();
+		ResponseEntity<Counter> cresp = cc.nextNumber(t.getToken(), "UnitTest");
+		ResponseEntity<Counters> rresp = cc.getCurrentReading(t.getToken(), null);
+		assertTrue("could not read", rresp.getStatusCode() == HttpStatus.OK);
+		Counters r = rresp.getBody();
+		Counter c = r.get(0);
+		assertTrue("Counter not 1", c.getCount() == 1l);
 	}
 
 	@Test
 	public void testPreviousNumber() {
-		fail("Not yet implemented");
+		ResponseEntity<Token> tresp = cc.getNewCounter("UnitTest");
+		Token t = tresp.getBody();
+		ResponseEntity<Counter> cresp = cc.previousNumber(t.getToken(), "UnitTest");
+		ResponseEntity<Counters> rresp = cc.getCurrentReading(t.getToken(), null);
+		assertTrue("could not read", rresp.getStatusCode() == HttpStatus.OK);
+		Counters r = rresp.getBody();
+		Counter c = r.get(0);
+		assertTrue("Counter not -1", c.getCount() == -1l);
 	}
 
 	@Test
 	public void testResetCounter() {
-		fail("Not yet implemented");
+		ResponseEntity<Token> tresp = cc.getNewCounter("UnitTest");
+		Token t = tresp.getBody();
+		ResponseEntity<Counter> cresp = cc.previousNumber(t.getToken(), "UnitTest");
+		ResponseEntity<Counters> rresp = cc.getCurrentReading(t.getToken(), null);
+		assertTrue("could not read", rresp.getStatusCode() == HttpStatus.OK);
+		Counters r = rresp.getBody();
+		Counter c = r.get(0);
+		assertTrue("Counter not 1", c.getCount() == -1l);
+		cresp = cc.resetCounter(t.getToken(), "UnitTest");
+		assertTrue("Counter not 1", cresp.getBody().getCount() == 1l);
+		cresp = cc.nextNumber(t.getToken(), "UnitTest");
+		assertTrue("Counter not 1", cresp.getBody().getCount() == 2l);
 	}
 
 }
