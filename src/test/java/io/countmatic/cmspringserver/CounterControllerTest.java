@@ -49,6 +49,18 @@ public class CounterControllerTest {
 	}
 
 	@Test
+	public void testBadRequest() {
+		ResponseEntity<Token> resp1 = cc.getNewCounter("UnitTest");
+		Token t = resp1.getBody();
+		ResponseEntity<Counter> resp2 = cc.addCounter(t.getToken(), "AnotherUnitTest");
+		Counter c = resp2.getBody();
+		assertTrue("Response not OK on add", resp2.getStatusCode() == HttpStatus.OK);
+		assertTrue("Wrong BadRequest", cc.previousNumber(t.getToken(), null).getStatusCode() == HttpStatus.BAD_REQUEST);
+		assertTrue("Wrong BadRequest", cc.resetCounter(t.getToken(), null).getStatusCode() == HttpStatus.BAD_REQUEST);
+		assertTrue("Wrong BadRequest", cc.nextNumber(t.getToken(), null).getStatusCode() == HttpStatus.BAD_REQUEST);
+	}
+
+	@Test
 	public void testGetNewCounter() throws Exception {
 		ResponseEntity<Token> resp = cc.getNewCounter("UnitTest");
 		Token t = resp.getBody();
