@@ -21,6 +21,17 @@ public class CounterControllerTest {
 	private CounterController cc = new CounterController();
 
 	@Test
+	public void testNotFound() {
+		assertTrue("Wrong found", cc.addCounter("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.deleteCounter("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.getCurrentReading("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.getReadOnlyToken("whatever").getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.previousNumber("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.resetCounter("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.nextNumber("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
+	}
+
+	@Test
 	public void testGetNewCounter() throws Exception {
 		ResponseEntity<Token> resp = cc.getNewCounter("UnitTest");
 		Token t = resp.getBody();
@@ -95,7 +106,22 @@ public class CounterControllerTest {
 
 	@Test
 	public void testGetReadOnlyToken() {
-		fail("Not yet implemented");
+		ResponseEntity<Token> tresp = cc.getNewCounter("UnitTest");
+		Token t = tresp.getBody();
+		ResponseEntity<Counter> cresp = cc.nextNumber(t.getToken(), "UnitTest");
+		tresp = cc.getReadOnlyToken(t.getToken());
+		assertTrue("Got no RO token", tresp.getStatusCode() == HttpStatus.OK);
+		t = tresp.getBody();
+		ResponseEntity<Counters> rresp = cc.getCurrentReading(t.getToken(), null);
+		assertTrue("could not read with RO token", rresp.getStatusCode() == HttpStatus.OK);
+		Counters r = rresp.getBody();
+		assertTrue("do not have one counter", r.size() == 1);
+		cresp = cc.nextNumber(t.getToken(), "UnitTest");
+		assertTrue("Permission granted", cresp.getStatusCode() == HttpStatus.FORBIDDEN);
+		rresp = cc.getCurrentReading(t.getToken(), null);
+		r = rresp.getBody();
+		Counter c = r.get(0);
+		assertTrue("Counter not 1", c.getCount() == 1l);
 	}
 
 	@Test
