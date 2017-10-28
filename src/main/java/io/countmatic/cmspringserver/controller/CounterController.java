@@ -161,8 +161,36 @@ public class CounterController implements CounterApi {
 	@Override
 	public ResponseEntity<Token> getReadOnlyToken(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token) {
-		// TODO: impl
-		return new ResponseEntity<Token>(HttpStatus.OK);
+		LOGGER.debug("creating ro token for " + token);
+		Jedis j = null;
+		ResponseEntity<Token> response = null;
+		// check token
+		try {
+			j = RedisPoolProvider.getInstance().getResource();
+			String access = j.hget(token, "__access");
+			if (null == access) {
+				LOGGER.debug("Token unknown");
+				response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			} else if (!"rw".equals(access)) {
+				LOGGER.debug("Token not a rw token");
+				response = new ResponseEntity<>(HttpStatus.FORBIDDEN);
+			} else {
+				LOGGER.debug("OK, creating ro token");
+				Map<String, String> hash = new HashMap<String, String>();
+				hash.put("__token", token);
+				hash.put("__access", "ro");
+				String roToken = this.createToken(true);
+				j.hmset(roToken, hash);
+				j.expire(roToken, DEFAULT_TTL);
+				response = new ResponseEntity<>(new Token().token(roToken), HttpStatus.OK);
+			}
+		} finally {
+			if (null != j) {
+				RedisPoolProvider.getInstance().returnResource(j);
+			}
+		}
+
+		return response;
 	}
 
 	@Override
