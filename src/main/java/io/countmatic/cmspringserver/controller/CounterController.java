@@ -68,6 +68,50 @@ public class CounterController implements CounterApi {
 		return response;
 	}
 
+	/**
+	 * Check token for existance and rw access
+	 * 
+	 * @param j
+	 * @param token
+	 * @return OK or NOT_FOUND or FORBIDDEN
+	 */
+	private HttpStatus checkIfExistsAndRw(Jedis j, String token) {
+		HttpStatus rc = HttpStatus.OK;
+		String access = j.hget(token, "__access");
+		if (null == access) {
+			LOGGER.debug("Token unknown");
+			rc = HttpStatus.NOT_FOUND;
+		} else if (!"rw".equals(access)) {
+			LOGGER.debug("Token not a rw token");
+			rc = HttpStatus.FORBIDDEN;
+		}
+
+		return rc;
+	}
+
+	/**
+	 * Get the single counter within token. If there are more counters, returns null
+	 * 
+	 * @param j
+	 * @param token
+	 * @return
+	 */
+	private Counter getTheOnlyOne(Jedis j, String token) {
+		Counter rc = null;
+		Map<String, String> map = j.hgetAll(token);
+		for (String key : map.keySet()) {
+			if (!key.startsWith("__")) {
+				if (null == rc) {
+					rc = new Counter().count(Long.valueOf(map.get(key))).name(key);
+				} else {
+					rc = null;
+					break;
+				}
+			}
+		}
+		return rc;
+	}
+
 	@Override
 	public ResponseEntity<Counter> addCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
@@ -80,13 +124,9 @@ public class CounterController implements CounterApi {
 		try {
 			// FIXME: check that name doesnt start like "__"
 			j = RedisPoolProvider.getInstance().getResource();
-			String access = j.hget(token, "__access");
-			if (null == access) {
-				LOGGER.debug("Token unknown");
-				response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
-			} else if (!"rw".equals(access)) {
-				LOGGER.debug("Token not a rw token");
-				response = new ResponseEntity<>(HttpStatus.FORBIDDEN);
+			HttpStatus s = this.checkIfExistsAndRw(j, token);
+			if (s != HttpStatus.OK) {
+				response = new ResponseEntity<>(s);
 			} else {
 				LOGGER.debug("OK, adding counter");
 				j.hset(token, name, "0");
@@ -114,13 +154,9 @@ public class CounterController implements CounterApi {
 		try {
 			// FIXME: check that name doesnt start like "__"
 			j = RedisPoolProvider.getInstance().getResource();
-			String access = j.hget(token, "__access");
-			if (null == access) {
-				LOGGER.debug("Token unknown");
-				response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
-			} else if (!"rw".equals(access)) {
-				LOGGER.debug("Token not a rw token");
-				response = new ResponseEntity<>(HttpStatus.FORBIDDEN);
+			HttpStatus s = this.checkIfExistsAndRw(j, token);
+			if (s != HttpStatus.OK) {
+				response = new ResponseEntity<>(s);
 			} else {
 				if (null != name) {
 					String val = j.hget(token, name);
@@ -215,13 +251,9 @@ public class CounterController implements CounterApi {
 		// check token
 		try {
 			j = RedisPoolProvider.getInstance().getResource();
-			String access = j.hget(token, "__access");
-			if (null == access) {
-				LOGGER.debug("Token unknown");
-				response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
-			} else if (!"rw".equals(access)) {
-				LOGGER.debug("Token not a rw token");
-				response = new ResponseEntity<>(HttpStatus.FORBIDDEN);
+			HttpStatus s = this.checkIfExistsAndRw(j, token);
+			if (s != HttpStatus.OK) {
+				response = new ResponseEntity<>(s);
 			} else {
 				LOGGER.debug("OK, creating ro token");
 				Map<String, String> hash = new HashMap<String, String>();
@@ -245,23 +277,142 @@ public class CounterController implements CounterApi {
 	public ResponseEntity<Counter> nextNumber(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
-		// TODO: impl
-		return new ResponseEntity<Counter>(HttpStatus.OK);
+		LOGGER.debug("next-ing Counter " + name + " in " + token);
+		Jedis j = null;
+		ResponseEntity<Counter> response = null;
+		// check token
+		try {
+			j = RedisPoolProvider.getInstance().getResource();
+			HttpStatus s = this.checkIfExistsAndRw(j, token);
+			if (s != HttpStatus.OK) {
+				response = new ResponseEntity<>(s);
+			} else {
+				LOGGER.debug("OK, make next");
+				if (null != name) {
+					String val = j.hget(token, name);
+					if (null == val) {
+						LOGGER.debug("Name unknown");
+						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
+					} else {
+						LOGGER.debug("OK, nexting field in counter");
+						Long newVal = j.hincrBy(token, name, 1l);
+						Counter c = new Counter().count(newVal).name(name);
+						j.expire(token, DEFAULT_TTL);
+						response = new ResponseEntity<>(c, HttpStatus.OK);
+					}
+				} else {
+					LOGGER.debug("OK, nexting singlecounter");
+					Counter c = this.getTheOnlyOne(j, token);
+					if (null == c) {
+						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+					} else {
+						Long newVal = j.hincrBy(token, c.getName(), 1l);
+						j.expire(token, DEFAULT_TTL);
+						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()), HttpStatus.OK);
+					}
+				}
+			}
+		} finally {
+			if (null != j) {
+				RedisPoolProvider.getInstance().returnResource(j);
+			}
+		}
+
+		return response;
 	}
 
 	@Override
 	public ResponseEntity<Counter> previousNumber(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
-		// TODO: impl
-		return new ResponseEntity<Counter>(HttpStatus.OK);
+		LOGGER.debug("previous-ing Counter " + name + " in " + token);
+		Jedis j = null;
+		ResponseEntity<Counter> response = null;
+		// check token
+		try {
+			j = RedisPoolProvider.getInstance().getResource();
+			HttpStatus s = this.checkIfExistsAndRw(j, token);
+			if (s != HttpStatus.OK) {
+				response = new ResponseEntity<>(s);
+			} else {
+				LOGGER.debug("OK, make previousing");
+				if (null != name) {
+					String val = j.hget(token, name);
+					if (null == val) {
+						LOGGER.debug("Name unknown");
+						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
+					} else {
+						LOGGER.debug("OK, previousing field in counter");
+						Long newVal = j.hincrBy(token, name, -1l);
+						Counter c = new Counter().count(newVal).name(name);
+						j.expire(token, DEFAULT_TTL);
+						response = new ResponseEntity<>(c, HttpStatus.OK);
+					}
+				} else {
+					LOGGER.debug("OK, previousing singlecounter");
+					Counter c = this.getTheOnlyOne(j, token);
+					if (null == c) {
+						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+					} else {
+						Long newVal = j.hincrBy(token, c.getName(), -1l);
+						j.expire(token, DEFAULT_TTL);
+						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()), HttpStatus.OK);
+					}
+				}
+			}
+		} finally {
+			if (null != j) {
+				RedisPoolProvider.getInstance().returnResource(j);
+			}
+		}
+
+		return response;
 	}
 
 	@Override
 	public ResponseEntity<Counter> resetCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
-		// TODO: impl
-		return new ResponseEntity<Counter>(HttpStatus.OK);
+		LOGGER.debug("reset-ing Counter " + name + " in " + token);
+		Jedis j = null;
+		ResponseEntity<Counter> response = null;
+		// check token
+		try {
+			j = RedisPoolProvider.getInstance().getResource();
+			HttpStatus s = this.checkIfExistsAndRw(j, token);
+			if (s != HttpStatus.OK) {
+				response = new ResponseEntity<>(s);
+			} else {
+				LOGGER.debug("OK, make reset");
+				if (null != name) {
+					String val = j.hget(token, name);
+					if (null == val) {
+						LOGGER.debug("Name unknown");
+						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
+					} else {
+						LOGGER.debug("OK, reset field in counter");
+						j.hset(token, name, "1");
+						j.expire(token, DEFAULT_TTL);
+						response = new ResponseEntity<>(new Counter().count(1l).name(name), HttpStatus.OK);
+					}
+				} else {
+					LOGGER.debug("OK, previousing singlecounter");
+					Counter c = this.getTheOnlyOne(j, token);
+					if (null == c) {
+						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+					} else {
+						j.hset(token, c.getName(), "1");
+						j.expire(token, DEFAULT_TTL);
+						response = new ResponseEntity<>(new Counter().count(1l).name(c.getName()), HttpStatus.OK);
+					}
+				}
+			}
+		} finally {
+			if (null != j) {
+				RedisPoolProvider.getInstance().returnResource(j);
+			}
+		}
+
+		return response;
 	}
 }
