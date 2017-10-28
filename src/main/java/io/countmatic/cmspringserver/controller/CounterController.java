@@ -190,7 +190,7 @@ public class CounterController implements CounterApi {
 	public ResponseEntity<Counters> getCurrentReading(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter") @RequestParam(value = "name", required = false) String name) {
-		LOGGER.debug("deleting Counter " + name + " in " + token);
+		LOGGER.debug("getCurrentReading Counter " + name + " in " + token);
 		Jedis j = null;
 		ResponseEntity<Counters> response = null;
 		// check token
