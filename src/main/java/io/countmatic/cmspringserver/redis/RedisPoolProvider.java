@@ -21,7 +21,7 @@ public class RedisPoolProvider {
 
 	private RedisPoolProvider() {
 		final JedisPoolConfig poolConfig = buildPoolConfig();
-		this.pool = new JedisPool(poolConfig, "localhost");
+		this.pool = new JedisPool(poolConfig, "redis");
 	}
 
 	private JedisPoolConfig buildPoolConfig() {
