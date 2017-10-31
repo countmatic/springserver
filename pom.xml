@@ -51,7 +51,7 @@
 		<dependency>
 			<groupId>io.countmatic.api</groupId>
 			<artifactId>springserver</artifactId>
-			<version>1.0.0</version>
+			<version>1.1.2</version>
 		</dependency>
 		<dependency>
 			<groupId>redis.clients</groupId>

@@ -38,14 +38,15 @@ public class CounterController implements CounterApi {
 		UUID uuid = UUID.randomUUID();
 		// String token = Long.toString(System.currentTimeMillis(), 16);
 		// Long rand = ThreadLocalRandom.current().nextLong();
-		String prefix = readonly ? "ro-" : "rw-";
+		String postfix = readonly ? "-ro" : "-rw";
 
-		return prefix + uuid;
+		return uuid + postfix;
 	}
 
 	@Override
 	public ResponseEntity<Token> getNewCounter(
-			@NotNull @ApiParam(value = "The name of the counter", required = true) @RequestParam(value = "name", required = true) String name) {
+			@NotNull @ApiParam(value = "The name of the counter", required = true) @RequestParam(value = "name", required = true) String name,
+			@ApiParam(value = "Initial value for the counter, default is 0") @RequestParam(value = "initialvalue", required = false) Long initialvalue) {
 		LOGGER.debug("creating new Counter for: " + name);
 		// create token
 		Token token = new Token().token(this.createToken(false));
@@ -55,10 +56,11 @@ public class CounterController implements CounterApi {
 			// FIXME: check that name doesnt start like "__"
 			j = RedisPoolProvider.getInstance().getResource();
 			Map<String, String> hash = new HashMap<String, String>();
-			hash.put(name, "0");
+			hash.put(name, initialvalue == null ? "0" : initialvalue.toString());
 			hash.put("__access", "rw");
 			j.hmset(token.getToken(), hash);
 			j.expire(token.getToken(), DEFAULT_TTL);
+			LOGGER.info("created new counter " + token.getToken());
 		} finally {
 			if (null != j) {
 				RedisPoolProvider.getInstance().returnResource(j);
@@ -69,7 +71,7 @@ public class CounterController implements CounterApi {
 	}
 
 	/**
-	 * Check token for existance and rw access
+	 * Check token for existence and rw access
 	 * 
 	 * @param j
 	 * @param token
@@ -115,11 +117,15 @@ public class CounterController implements CounterApi {
 	@Override
 	public ResponseEntity<Counter> addCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
-			@NotNull @ApiParam(value = "The name of the counter", required = true) @RequestParam(value = "name", required = true) String name) {
+			@NotNull @ApiParam(value = "The name of the counter", required = true) @RequestParam(value = "name", required = true) String name,
+			@ApiParam(value = "Initial value for the counter, default is 0") @RequestParam(value = "initialvalue", required = false) Long initialvalue) {
 
 		LOGGER.debug("adding Counter " + name + " to " + token);
 		Jedis j = null;
 		ResponseEntity<Counter> response = null;
+		if (null == initialvalue) {
+			initialvalue = 0l;
+		}
 		// check token
 		try {
 			// FIXME: check that name doesnt start like "__"
@@ -129,9 +135,9 @@ public class CounterController implements CounterApi {
 				response = new ResponseEntity<>(s);
 			} else {
 				LOGGER.debug("OK, adding counter");
-				j.hset(token, name, "0");
+				j.hset(token, name, initialvalue.toString());
 				j.expire(token, DEFAULT_TTL);
-				Counter c = new Counter().count(0l).name(name);
+				Counter c = new Counter().count(initialvalue).name(name);
 				response = new ResponseEntity<>(c, HttpStatus.OK);
 			}
 		} finally {
@@ -262,7 +268,9 @@ public class CounterController implements CounterApi {
 				String roToken = this.createToken(true);
 				j.hmset(roToken, hash);
 				j.expire(roToken, DEFAULT_TTL);
+				j.expire(token, DEFAULT_TTL);
 				response = new ResponseEntity<>(new Token().token(roToken), HttpStatus.OK);
+				LOGGER.info("Created new readonly token : " + roToken);
 			}
 		} finally {
 			if (null != j) {
@@ -276,10 +284,14 @@ public class CounterController implements CounterApi {
 	@Override
 	public ResponseEntity<Counter> nextNumber(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
-			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
+			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name,
+			@ApiParam(value = "Value to add to the current counter's value, default is 1") @RequestParam(value = "increment", required = false) Long increment) {
 		LOGGER.debug("next-ing Counter " + name + " in " + token);
 		Jedis j = null;
 		ResponseEntity<Counter> response = null;
+		if (null == increment) {
+			increment = 1l;
+		}
 		// check token
 		try {
 			j = RedisPoolProvider.getInstance().getResource();
@@ -295,7 +307,7 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
 					} else {
 						LOGGER.debug("OK, nexting field in counter");
-						Long newVal = j.hincrBy(token, name, 1l);
+						Long newVal = j.hincrBy(token, name, increment);
 						Counter c = new Counter().count(newVal).name(name);
 						j.expire(token, DEFAULT_TTL);
 						response = new ResponseEntity<>(c, HttpStatus.OK);
@@ -306,7 +318,7 @@ public class CounterController implements CounterApi {
 					if (null == c) {
 						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
 					} else {
-						Long newVal = j.hincrBy(token, c.getName(), 1l);
+						Long newVal = j.hincrBy(token, c.getName(), increment);
 						j.expire(token, DEFAULT_TTL);
 						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()), HttpStatus.OK);
 					}
@@ -324,10 +336,15 @@ public class CounterController implements CounterApi {
 	@Override
 	public ResponseEntity<Counter> previousNumber(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
-			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
+			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name,
+			@ApiParam(value = "Value to substract from the counter's current value, default is 1") @RequestParam(value = "decrement", required = false) Long decrement) {
 		LOGGER.debug("previous-ing Counter " + name + " in " + token);
 		Jedis j = null;
 		ResponseEntity<Counter> response = null;
+		if (null == decrement) {
+			decrement = 1l;
+		}
+		decrement = -decrement;
 		// check token
 		try {
 			j = RedisPoolProvider.getInstance().getResource();
@@ -343,7 +360,7 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
 					} else {
 						LOGGER.debug("OK, previousing field in counter");
-						Long newVal = j.hincrBy(token, name, -1l);
+						Long newVal = j.hincrBy(token, name, decrement);
 						Counter c = new Counter().count(newVal).name(name);
 						j.expire(token, DEFAULT_TTL);
 						response = new ResponseEntity<>(c, HttpStatus.OK);
@@ -354,7 +371,7 @@ public class CounterController implements CounterApi {
 					if (null == c) {
 						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
 					} else {
-						Long newVal = j.hincrBy(token, c.getName(), -1l);
+						Long newVal = j.hincrBy(token, c.getName(), decrement);
 						j.expire(token, DEFAULT_TTL);
 						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()), HttpStatus.OK);
 					}
@@ -372,10 +389,14 @@ public class CounterController implements CounterApi {
 	@Override
 	public ResponseEntity<Counter> resetCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
-			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
+			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name,
+			@ApiParam(value = "New value for the counter, default is 1") @RequestParam(value = "initialvalue", required = false) Long initialvalue) {
 		LOGGER.debug("reset-ing Counter " + name + " in " + token);
 		Jedis j = null;
 		ResponseEntity<Counter> response = null;
+		if (initialvalue == null) {
+			initialvalue = 1l;
+		}
 		// check token
 		try {
 			j = RedisPoolProvider.getInstance().getResource();
@@ -391,9 +412,9 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
 					} else {
 						LOGGER.debug("OK, reset field in counter");
-						j.hset(token, name, "1");
+						j.hset(token, name, initialvalue.toString());
 						j.expire(token, DEFAULT_TTL);
-						response = new ResponseEntity<>(new Counter().count(1l).name(name), HttpStatus.OK);
+						response = new ResponseEntity<>(new Counter().count(initialvalue).name(name), HttpStatus.OK);
 					}
 				} else {
 					LOGGER.debug("OK, previousing singlecounter");
@@ -401,9 +422,9 @@ public class CounterController implements CounterApi {
 					if (null == c) {
 						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
 					} else {
-						j.hset(token, c.getName(), "1");
+						j.hset(token, c.getName(), initialvalue.toString());
 						j.expire(token, DEFAULT_TTL);
-						response = new ResponseEntity<>(new Counter().count(1l).name(c.getName()), HttpStatus.OK);
+						response = new ResponseEntity<>(new Counter().count(initialvalue).name(c.getName()), HttpStatus.OK);
 					}
 				}
 			}
