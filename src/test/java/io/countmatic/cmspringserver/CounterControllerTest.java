@@ -68,7 +68,7 @@ public class CounterControllerTest {
 		Token t = resp.getBody();
 		assertTrue("Response not OK on new", resp.getStatusCode() == HttpStatus.OK);
 		assertTrue("Token is null", t != null && t.getToken() != null);
-		assertTrue("Token doesnt start like rw", t.getToken().startsWith("rw"));
+		assertTrue("Token doesnt endswith rw", t.getToken().endsWith("rw"));
 	}
 
 	@Test
