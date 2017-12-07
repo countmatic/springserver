@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import io.countmatic.api.spring.model.Counter;
@@ -44,6 +45,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Token> getNewCounter(
 			@NotNull @ApiParam(value = "The name of the counter", required = true) @RequestParam(value = "name", required = true) String name,
 			@ApiParam(value = "Initial value for the counter, default is 0") @RequestParam(value = "initialvalue", required = false) Long initialvalue) {
@@ -115,6 +117,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counter> addCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@NotNull @ApiParam(value = "The name of the counter", required = true) @RequestParam(value = "name", required = true) String name,
@@ -150,6 +153,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counter> deleteCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name) {
@@ -193,6 +197,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counters> getCurrentReading(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter") @RequestParam(value = "name", required = false) String name) {
@@ -249,6 +254,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Token> getReadOnlyToken(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token) {
 		LOGGER.debug("creating ro token for " + token);
@@ -282,6 +288,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counter> nextNumber(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name,
@@ -334,6 +341,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counter> previousNumber(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name,
@@ -387,6 +395,7 @@ public class CounterController implements CounterApi {
 	}
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counter> resetCounter(
 			@NotNull @ApiParam(value = "Your access token", required = true) @RequestParam(value = "token", required = true) String token,
 			@ApiParam(value = "Optionally the name of the requested counter, mandatory for grouptokens") @RequestParam(value = "name", required = false) String name,

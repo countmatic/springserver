@@ -3,6 +3,7 @@ package io.countmatic.cmspringserver.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
 
 import io.countmatic.api.spring.model.Counter;
 import io.countmatic.api.spring.server.StatsApi;
@@ -13,6 +14,7 @@ import redis.clients.jedis.Jedis;
 public class StatsController implements StatsApi {
 
 	@Override
+	@CrossOrigin
 	public ResponseEntity<Counter> getNumberOfCounters() {
 		ResponseEntity<Counter> response = null;
 		Jedis j = null;
