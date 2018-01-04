@@ -8,16 +8,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.junit4.SpringRunner;
 
-import io.countmatic.api.spring.model.Counter;
-import io.countmatic.api.spring.model.Counters;
-import io.countmatic.api.spring.model.Token;
+import io.countmatic.api_v2.spring.model.Counter;
+import io.countmatic.api_v2.spring.model.Counters;
+import io.countmatic.api_v2.spring.model.Token;
 import io.countmatic.cmspringserver.controller.CounterController;
 
 @RunWith(SpringRunner.class)
 public class CounterControllerTest {
 
 	// TODO: Add tests for offsets, increment and decrements
-	
+
 	// @Autowired
 	private CounterController cc = new CounterController();
 
@@ -39,7 +39,8 @@ public class CounterControllerTest {
 		tresp = cc.getReadOnlyToken(t.getToken());
 		assertTrue("Got no RO token", tresp.getStatusCode() == HttpStatus.OK);
 		t = tresp.getBody();
-		assertTrue("Wrong Permissiondenied", cc.addCounter(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied",
+				cc.addCounter(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
 		assertTrue("Wrong Permissiondenied",
 				cc.deleteCounter(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
 		assertTrue("Wrong Permissiondenied", cc.getReadOnlyToken(t.getToken()).getStatusCode() == HttpStatus.FORBIDDEN);
@@ -47,7 +48,8 @@ public class CounterControllerTest {
 				cc.previousNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
 		assertTrue("Wrong Permissiondenied",
 				cc.resetCounter(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
-		assertTrue("Wrong Permissiondenied", cc.nextNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
+		assertTrue("Wrong Permissiondenied",
+				cc.nextNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
 	}
 
 	@Test
@@ -57,9 +59,12 @@ public class CounterControllerTest {
 		ResponseEntity<Counter> resp2 = cc.addCounter(t.getToken(), "AnotherUnitTest", null);
 		Counter c = resp2.getBody();
 		assertTrue("Response not OK on add", resp2.getStatusCode() == HttpStatus.OK);
-		assertTrue("Wrong BadRequest", cc.previousNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.BAD_REQUEST);
-		assertTrue("Wrong BadRequest", cc.resetCounter(t.getToken(), null, null).getStatusCode() == HttpStatus.BAD_REQUEST);
-		assertTrue("Wrong BadRequest", cc.nextNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.BAD_REQUEST);
+		assertTrue("Wrong BadRequest",
+				cc.previousNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.BAD_REQUEST);
+		assertTrue("Wrong BadRequest",
+				cc.resetCounter(t.getToken(), null, null).getStatusCode() == HttpStatus.BAD_REQUEST);
+		assertTrue("Wrong BadRequest",
+				cc.nextNumber(t.getToken(), null, null).getStatusCode() == HttpStatus.BAD_REQUEST);
 	}
 
 	@Test

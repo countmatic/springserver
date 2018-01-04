@@ -2,26 +2,47 @@ package io.countmatic.cmspringserver.redis;
 
 import java.time.Duration;
 
+import javax.annotation.PostConstruct;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
+/**
+ * Provide resources for two redis instances. One for persistent data, another
+ * one for in-memory data that gets lost on downtime.
+ * 
+ * @author Rainer Feike
+ *
+ */
+@Component
 public class RedisPoolProvider {
 
-	private JedisPool pool;
-	private static RedisPoolProvider instance = null;
+	private JedisPool persistentPool;
+	private JedisPool volatilePool;
 
-	public static synchronized RedisPoolProvider getInstance() {
-		if (null == instance) {
-			instance = new RedisPoolProvider();
-		}
+	@Value("${countmatic.persistentServer}")
+	private String persitentHost;
 
-		return instance;
+	@Value("${countmatic.volatileServer}")
+	private String volatileHost;
+
+	public RedisPoolProvider() {
 	}
 
-	private RedisPoolProvider() {
+	@PostConstruct
+	public void postConstruct() {
+		if (null == volatileHost || null == persitentHost || volatileHost.isEmpty() || persitentHost.isEmpty()) {
+			throw new RuntimeException(
+					"Please set countmatic.persitentServer and countmatic.volatileServer in application.properties");
+		}
 		final JedisPoolConfig poolConfig = buildPoolConfig();
-		this.pool = new JedisPool(poolConfig, "redis");
+		this.persistentPool = new JedisPool(poolConfig, persitentHost);
+		this.volatilePool = new JedisPool(poolConfig, volatileHost);
+
 	}
 
 	private JedisPoolConfig buildPoolConfig() {
@@ -39,12 +60,16 @@ public class RedisPoolProvider {
 		return poolConfig;
 	}
 
-	public Jedis getResource() {
-		return this.pool.getResource();
+	public Jedis getPersistentResource() {
+		return this.persistentPool.getResource();
+	}
+
+	public Jedis getVolatileResource() {
+		return this.volatilePool.getResource();
 	}
 
 	public void returnResource(Jedis resource) {
-		// returnResource is depricated !
+		// returnResource is deprecated !
 		resource.close();
 	}
 
