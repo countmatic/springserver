@@ -59,8 +59,10 @@ public class CounterController implements CounterApi {
 		Token token = new Token().token(this.createToken(false));
 		// add hash to redis
 		Jedis jedis = null;
+		if (name.startsWith("__")) {
+			return new ResponseEntity<>(HttpStatus.CONFLICT);
+		}
 		try {
-			// FIXME: check that name doesnt start like "__"
 			jedis = redisPoolProvider.getPersistentResource();
 			Map<String, String> hash = new HashMap<String, String>();
 			hash.put(name, initialvalue == null ? "0" : initialvalue.toString());
@@ -135,9 +137,12 @@ public class CounterController implements CounterApi {
 		if (null == initialvalue) {
 			initialvalue = 0l;
 		}
+		// check name
+		if (name.startsWith("__")) {
+			return new ResponseEntity<>(HttpStatus.CONFLICT);
+		}
 		// check token
 		try {
-			// FIXME: check that name doesnt start like "__"
 			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
