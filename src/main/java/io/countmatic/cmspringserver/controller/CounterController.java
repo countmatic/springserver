@@ -1,5 +1,6 @@
 package io.countmatic.cmspringserver.controller;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -8,22 +9,26 @@ import javax.validation.constraints.NotNull;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import io.countmatic.api.spring.model.Counter;
-import io.countmatic.api.spring.model.Counters;
-import io.countmatic.api.spring.model.Token;
-import io.countmatic.api.spring.server.CounterApi;
+import io.countmatic.api_v2.spring.model.Counter;
+import io.countmatic.api_v2.spring.model.Counters;
+import io.countmatic.api_v2.spring.model.Token;
+import io.countmatic.api_v2.spring.server.CounterApi;
 import io.countmatic.cmspringserver.redis.RedisPoolProvider;
 import io.swagger.annotations.ApiParam;
 import redis.clients.jedis.Jedis;
 
 @Controller
 public class CounterController implements CounterApi {
+
+	@Autowired
+	RedisPoolProvider redisPoolProvider;
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(CounterController.class);
 	// One week default TTL
@@ -53,19 +58,20 @@ public class CounterController implements CounterApi {
 		// create token
 		Token token = new Token().token(this.createToken(false));
 		// add hash to redis
-		Jedis j = null;
+		Jedis jedis = null;
 		try {
 			// FIXME: check that name doesnt start like "__"
-			j = RedisPoolProvider.getInstance().getResource();
+			jedis = redisPoolProvider.getPersistentResource();
 			Map<String, String> hash = new HashMap<String, String>();
 			hash.put(name, initialvalue == null ? "0" : initialvalue.toString());
 			hash.put("__access", "rw");
-			j.hmset(token.getToken(), hash);
-			j.expire(token.getToken(), DEFAULT_TTL);
+			hash.put("__t_" + name, String.valueOf(new Date().getTime()));
+			jedis.hmset(token.getToken(), hash);
+			jedis.expire(token.getToken(), DEFAULT_TTL);
 			LOGGER.info("created new counter " + token.getToken());
 		} finally {
-			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+			if (null != jedis) {
+				redisPoolProvider.returnResource(jedis);
 			}
 		}
 		ResponseEntity<Token> response = new ResponseEntity<>(token, HttpStatus.OK);
@@ -132,20 +138,22 @@ public class CounterController implements CounterApi {
 		// check token
 		try {
 			// FIXME: check that name doesnt start like "__"
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
 				response = new ResponseEntity<>(s);
 			} else {
 				LOGGER.debug("OK, adding counter");
+				long modified = new Date().getTime();
 				j.hset(token, name, initialvalue.toString());
+				j.hset(token, "__t_" + name, String.valueOf(modified));
 				j.expire(token, DEFAULT_TTL);
-				Counter c = new Counter().count(initialvalue).name(name);
+				Counter c = new Counter().count(initialvalue).name(name).modified(modified);
 				response = new ResponseEntity<>(c, HttpStatus.OK);
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
@@ -163,7 +171,7 @@ public class CounterController implements CounterApi {
 		// check token
 		try {
 			// FIXME: check that name doesnt start like "__"
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
 				response = new ResponseEntity<>(s);
@@ -175,7 +183,8 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
 					} else {
 						LOGGER.debug("OK, deleting field in groupcounter");
-						Counter c = new Counter().count(Long.valueOf(val)).name(name);
+						String ts = j.hget(token, "__t_" + name);
+						Counter c = new Counter().count(Long.valueOf(val)).name(name).modified(Long.valueOf(ts));
 						j.hdel(token, name);
 						j.expire(token, DEFAULT_TTL);
 						response = new ResponseEntity<>(c, HttpStatus.OK);
@@ -183,13 +192,13 @@ public class CounterController implements CounterApi {
 				} else {
 					LOGGER.debug("OK, deleting groupcounter");
 					j.del(token);
-					Counter c = new Counter().count(0l).name(name);
+					Counter c = new Counter().count(0l).name(name).modified(0l);
 					response = new ResponseEntity<>(c, HttpStatus.OK);
 				}
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
@@ -207,7 +216,7 @@ public class CounterController implements CounterApi {
 		// check token
 		try {
 			// FIXME: check that name doesnt start like "__"
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			String access = j.hget(token, "__access");
 			if (null == access) {
 				LOGGER.debug("Token unknown");
@@ -226,7 +235,8 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.NOT_FOUND);
 					} else {
 						LOGGER.debug("OK, have field in counter");
-						Counter c = new Counter().count(Long.valueOf(val)).name(name);
+						String ts = j.hget(token, "__t_" + name);
+						Counter c = new Counter().count(Long.valueOf(val)).name(name).modified(Long.valueOf(ts));
 						j.expire(token, DEFAULT_TTL);
 						counters.add(c);
 						response = new ResponseEntity<>(counters, HttpStatus.OK);
@@ -236,7 +246,8 @@ public class CounterController implements CounterApi {
 					Map<String, String> map = j.hgetAll(token);
 					for (String key : map.keySet()) {
 						if (!key.startsWith("__")) {
-							Counter c = new Counter().count(Long.valueOf(map.get(key))).name(key);
+							Counter c = new Counter().count(Long.valueOf(map.get(key))).name(key)
+									.modified(Long.valueOf(map.get("__t_" + key)));
 							counters.add(c);
 						}
 					}
@@ -246,7 +257,7 @@ public class CounterController implements CounterApi {
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
@@ -262,7 +273,7 @@ public class CounterController implements CounterApi {
 		ResponseEntity<Token> response = null;
 		// check token
 		try {
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
 				response = new ResponseEntity<>(s);
@@ -280,7 +291,7 @@ public class CounterController implements CounterApi {
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
@@ -301,7 +312,7 @@ public class CounterController implements CounterApi {
 		}
 		// check token
 		try {
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
 				response = new ResponseEntity<>(s);
@@ -315,8 +326,9 @@ public class CounterController implements CounterApi {
 					} else {
 						LOGGER.debug("OK, nexting field in counter");
 						Long newVal = j.hincrBy(token, name, increment);
-						Counter c = new Counter().count(newVal).name(name);
+						Counter c = new Counter().count(newVal).name(name).modified(0l);
 						j.expire(token, DEFAULT_TTL);
+						j.hset(token, "__t_" + name, String.valueOf(new Date().getTime()));
 						response = new ResponseEntity<>(c, HttpStatus.OK);
 					}
 				} else {
@@ -326,14 +338,16 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
 					} else {
 						Long newVal = j.hincrBy(token, c.getName(), increment);
+						j.hset(token, "__t_" + c.getName(), String.valueOf(new Date().getTime()));
 						j.expire(token, DEFAULT_TTL);
-						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()), HttpStatus.OK);
+						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()).modified(0l),
+								HttpStatus.OK);
 					}
 				}
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
@@ -355,7 +369,7 @@ public class CounterController implements CounterApi {
 		decrement = -decrement;
 		// check token
 		try {
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
 				response = new ResponseEntity<>(s);
@@ -369,7 +383,8 @@ public class CounterController implements CounterApi {
 					} else {
 						LOGGER.debug("OK, previousing field in counter");
 						Long newVal = j.hincrBy(token, name, decrement);
-						Counter c = new Counter().count(newVal).name(name);
+						Counter c = new Counter().count(newVal).name(name).modified(0l);
+						j.hset(token, "__t_" + name, String.valueOf(new Date().getTime()));
 						j.expire(token, DEFAULT_TTL);
 						response = new ResponseEntity<>(c, HttpStatus.OK);
 					}
@@ -380,14 +395,16 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
 					} else {
 						Long newVal = j.hincrBy(token, c.getName(), decrement);
+						j.hset(token, "__t_" + c.getName(), String.valueOf(new Date().getTime()));
 						j.expire(token, DEFAULT_TTL);
-						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()), HttpStatus.OK);
+						response = new ResponseEntity<>(new Counter().count(newVal).name(c.getName()).modified(0l),
+								HttpStatus.OK);
 					}
 				}
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
@@ -408,7 +425,7 @@ public class CounterController implements CounterApi {
 		}
 		// check token
 		try {
-			j = RedisPoolProvider.getInstance().getResource();
+			j = redisPoolProvider.getPersistentResource();
 			HttpStatus s = this.checkIfExistsAndRw(j, token);
 			if (s != HttpStatus.OK) {
 				response = new ResponseEntity<>(s);
@@ -422,8 +439,10 @@ public class CounterController implements CounterApi {
 					} else {
 						LOGGER.debug("OK, reset field in counter");
 						j.hset(token, name, initialvalue.toString());
+						j.hset(token, "__t_" + name, String.valueOf(new Date().getTime()));
 						j.expire(token, DEFAULT_TTL);
-						response = new ResponseEntity<>(new Counter().count(initialvalue).name(name), HttpStatus.OK);
+						response = new ResponseEntity<>(new Counter().count(initialvalue).name(name).modified(0l),
+								HttpStatus.OK);
 					}
 				} else {
 					LOGGER.debug("OK, previousing singlecounter");
@@ -432,14 +451,16 @@ public class CounterController implements CounterApi {
 						response = new ResponseEntity<>(HttpStatus.BAD_REQUEST);
 					} else {
 						j.hset(token, c.getName(), initialvalue.toString());
+						j.hset(token, "__t_" + c.getName(), String.valueOf(new Date().getTime()));
 						j.expire(token, DEFAULT_TTL);
-						response = new ResponseEntity<>(new Counter().count(initialvalue).name(c.getName()), HttpStatus.OK);
+						response = new ResponseEntity<>(
+								new Counter().count(initialvalue).name(c.getName()).modified(0l), HttpStatus.OK);
 					}
 				}
 			}
 		} finally {
 			if (null != j) {
-				RedisPoolProvider.getInstance().returnResource(j);
+				redisPoolProvider.returnResource(j);
 			}
 		}
 
