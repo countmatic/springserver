@@ -1,0 +1,12 @@
+{"properties": [
+  {
+    "name": "countmatic.volatileServer",
+    "type": "java.lang.String",
+    "description": "Hostname of the redis server for in-memory data (def: mem_redis)"
+  },
+  {
+    "name": "countmatic.persistentServer",
+    "type": "java.lang.String",
+    "description": "Hostname of the redis server for persistent data (def: redis)"
+  }
+]}
