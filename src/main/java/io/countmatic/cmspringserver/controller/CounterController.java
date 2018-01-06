@@ -138,7 +138,7 @@ public class CounterController implements CounterApi {
 			initialvalue = 0l;
 		}
 		// check name
-		if (name.startsWith("__")) {
+		if ((null == name) || name.startsWith("__")) {
 			return new ResponseEntity<>(HttpStatus.CONFLICT);
 		}
 		// check token

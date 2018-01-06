@@ -4,6 +4,8 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -14,16 +16,17 @@ import io.countmatic.api_v2.spring.model.Token;
 import io.countmatic.cmspringserver.controller.CounterController;
 
 @RunWith(SpringRunner.class)
+@SpringBootTest
 public class CounterControllerTest {
 
 	// TODO: Add tests for offsets, increment and decrements
 
-	// @Autowired
-	private CounterController cc = new CounterController();
+	@Autowired
+	private CounterController cc;
 
 	@Test
 	public void testNotFound() {
-		assertTrue("Wrong found", cc.addCounter("whatever", null, null).getStatusCode() == HttpStatus.NOT_FOUND);
+		assertTrue("Wrong found", cc.addCounter("whatever", "UT", 1l).getStatusCode() == HttpStatus.NOT_FOUND);
 		assertTrue("Wrong found", cc.deleteCounter("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
 		assertTrue("Wrong found", cc.getCurrentReading("whatever", null).getStatusCode() == HttpStatus.NOT_FOUND);
 		assertTrue("Wrong found", cc.getReadOnlyToken("whatever").getStatusCode() == HttpStatus.NOT_FOUND);
@@ -40,7 +43,7 @@ public class CounterControllerTest {
 		assertTrue("Got no RO token", tresp.getStatusCode() == HttpStatus.OK);
 		t = tresp.getBody();
 		assertTrue("Wrong Permissiondenied",
-				cc.addCounter(t.getToken(), null, null).getStatusCode() == HttpStatus.FORBIDDEN);
+				cc.addCounter(t.getToken(), "UT", 1l).getStatusCode() == HttpStatus.FORBIDDEN);
 		assertTrue("Wrong Permissiondenied",
 				cc.deleteCounter(t.getToken(), null).getStatusCode() == HttpStatus.FORBIDDEN);
 		assertTrue("Wrong Permissiondenied", cc.getReadOnlyToken(t.getToken()).getStatusCode() == HttpStatus.FORBIDDEN);
