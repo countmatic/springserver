@@ -189,6 +189,9 @@ public class CounterController implements CounterApi {
 					} else {
 						LOGGER.debug("OK, deleting field in groupcounter");
 						String ts = j.hget(token, "__t_" + name);
+						if (null == ts) {
+							ts = "0";
+						}
 						Counter c = new Counter().count(Long.valueOf(val)).name(name).modified(Long.valueOf(ts));
 						j.hdel(token, name);
 						j.expire(token, DEFAULT_TTL);
@@ -241,6 +244,9 @@ public class CounterController implements CounterApi {
 					} else {
 						LOGGER.debug("OK, have field in counter");
 						String ts = j.hget(token, "__t_" + name);
+						if (null == ts) {
+							ts = "0";
+						}
 						Counter c = new Counter().count(Long.valueOf(val)).name(name).modified(Long.valueOf(ts));
 						j.expire(token, DEFAULT_TTL);
 						counters.add(c);
@@ -251,8 +257,12 @@ public class CounterController implements CounterApi {
 					Map<String, String> map = j.hgetAll(token);
 					for (String key : map.keySet()) {
 						if (!key.startsWith("__")) {
+							String ts = map.get("__t_" + key);
+							if (null == ts) {
+								ts = "0";
+							}
 							Counter c = new Counter().count(Long.valueOf(map.get(key))).name(key)
-									.modified(Long.valueOf(map.get("__t_" + key)));
+									.modified(Long.valueOf(ts));
 							counters.add(c);
 						}
 					}
