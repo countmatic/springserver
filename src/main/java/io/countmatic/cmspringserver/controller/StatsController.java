@@ -40,7 +40,10 @@ public class StatsController implements StatsApi {
 	@CrossOrigin
 	public ResponseEntity<ServerInfo> getServerInfo() {
         // TODO: impl!
-        return new ResponseEntity<ServerInfo>(HttpStatus.OK);
+        return new ResponseEntity<ServerInfo>(new ServerInfo().apiVersion("2.0")
+        		.persistentBackend("redis").volatileBackend("redis")
+        		.currentCounters(redisPoolProvider.getPersistentResource().dbSize())
+        		.maxNamesPerToken(100l).server("cm Spring Boot (v1.5) Server"), HttpStatus.OK);
     }
 	
 }
